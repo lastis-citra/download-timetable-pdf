@@ -11,6 +11,17 @@ import PyPDF2
 from natsort import natsorted, ns
 
 
+def create_save_path(name):
+    # save_directory = get_jreast_station_name(soup)
+    save_path = os.path.join('pdf', name)
+    print(name)
+
+    if name not in os.listdir('./pdf'):
+        os.mkdir(save_path)
+
+    return save_path
+
+
 def create_pdf(url, count, save_path):
     options = {
         'page-size': 'A4',
@@ -27,8 +38,9 @@ def create_pdf(url, count, save_path):
     config = pdfkit.configuration(wkhtmltopdf=config_path)
 
     # WebページをPDF出力
-    # url = 'https://www.jreast-timetable.jp/2102/timetable/tt0307/0307010p.html'
     save_file_path = os.path.join(save_path, str(count) + '.pdf')
+    print('url: ' + url)
+    print('save_file_path: ' + save_file_path)
     pdfkit.from_url(url, save_file_path, options=options, configuration=config)
 
 
@@ -51,9 +63,9 @@ def merge_pdf_files(save_path, pdf_name):
         pdf_writer.write(f)
 
 
-def get_jreast_station_name(soup):
-    station_name = soup.select_one('h1.station_name01').string
-    return 'JR' + station_name
+# def get_jreast_station_name(soup):
+#     station_name = soup.select_one('h1.station_name01').string
+#     return 'JR' + station_name
 
 
 # 印刷用ページはpが必要
@@ -61,18 +73,13 @@ def get_jreast_print_url(url):
     return url.replace('.html', 'p.html')
 
 
-def search_jreast_timetable_urls(url):
+def search_jreast_timetable_urls(url, name):
     res = requests.get(url)
     res.encoding = res.apparent_encoding
 
     soup = BeautifulSoup(res.text, 'html.parser')
-    save_directory = get_jreast_station_name(soup)
-    save_path = os.path.join('pdf', save_directory)
-    print(save_directory)
 
-    if save_directory not in os.listdir('./pdf'):
-        os.mkdir(save_path)
-
+    save_path = create_save_path(name)
     timetable_urls = []
 
     # <td class="weekday"><a href="../2102/timetable/tt0307/0307010.html">平日</a></td>
@@ -95,24 +102,42 @@ def search_jreast_timetable_urls(url):
         count += 1
         create_pdf(get_jreast_print_url(timetable_url), count, save_path)
 
-    merge_pdf_files(save_path, save_directory)
+    merge_pdf_files(save_path, name)
 
 
-def main_function(url):
+def search_jorudan_timetable_urls(url, name):
+    save_path = create_save_path(name)
+    timetable_urls = []
+    timetable_urls.append(url + '?&Dw=1&type=p&dr=0')
+    timetable_urls.append(url + '?&Dw=1&type=p&dr=1')
+    timetable_urls.append(url + '?&Dw=3&type=p&dr=0')
+    timetable_urls.append(url + '?&Dw=3&type=p&dr=1')
+
+    count = 0
+    for timetable_url in timetable_urls:
+        count += 1
+        create_pdf(timetable_url, count, save_path)
+
+    merge_pdf_files(save_path, name)
+
+
+def main_function(url, name):
     if 'jreast' in url:
-        search_jreast_timetable_urls(url)
-
+        search_jreast_timetable_urls(url, name)
+    elif 'jorudan' in url:
+        search_jorudan_timetable_urls(url, name)
 
 if __name__ == '__main__':
     file_name = './input_url_list.txt'
-    with open(file_name, 'r', errors='replace') as file:
-        input_url_list = file.readlines()
+    with open(file_name, 'r', errors='replace', encoding="utf_8") as file:
+        line_list = file.readlines()
 
     line_count = 0
 
-    for input_url in input_url_list:
+    for line in line_list:
         line_count += 1
-        input_url = input_url.split(',')[0]
-        print(line_count, '/', len(input_url_list))
+        input_url = line.split(',')[0]
+        file_name = line.split(',')[1].replace('\n','')
+        print(line_count, '/', len(line_list))
         print('input_url: ' + input_url)
-        main_function(input_url)
+        main_function(input_url, file_name)
