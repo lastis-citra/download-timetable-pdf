@@ -140,6 +140,27 @@ def search_tokyu_timetable_urls(url, name):
     download_pdfs(timetable_urls, name)
 
 
+# 元は http://www.jr-odekake.net/eki/timetable.php?id=0610135 などのURLだが，
+# このページのjs内にある https://mydia.jr-odekake.net/cgi-bin/district2/2815.html
+# などのURLからスタートする
+def search_jrwest_timetable_urls(url, name):
+    res = requests.get(url)
+    res.encoding = res.apparent_encoding
+    soup = BeautifulSoup(res.text, 'html.parser')
+
+    timetable_urls = []
+
+    a_tags = soup.select('td[scope="row"] a')
+    for a in a_tags:
+        url_today = a['onclick'].split('\'')[1]
+        # url_holiday = url_today + '&yearmonth=20210307&x=28&y=11'
+        timetable_urls.append(url_today)
+
+    print(timetable_urls)
+
+    download_pdfs(timetable_urls, name)
+
+
 def main_function(url, name):
     if 'jreast' in url:
         search_jreast_timetable_urls(url, name)
@@ -147,6 +168,8 @@ def main_function(url, name):
         search_jorudan_timetable_urls(url, name)
     elif 'tokyu' in url:
         search_tokyu_timetable_urls(url, name)
+    elif 'jr-odekake' in url:
+        search_jrwest_timetable_urls(url, name)
 
 
 if __name__ == '__main__':
