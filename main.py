@@ -22,6 +22,17 @@ def create_save_path(name):
     return save_path
 
 
+def download_pdfs(timetable_urls, name):
+    save_path = create_save_path(name)
+
+    count = 0
+    for timetable_url in timetable_urls:
+        count += 1
+        create_pdf(get_jreast_print_url(timetable_url), count, save_path)
+
+    merge_pdf_files(save_path, name)
+
+
 def create_pdf(url, count, save_path):
     options = {
         'page-size': 'A4',
@@ -76,10 +87,8 @@ def get_jreast_print_url(url):
 def search_jreast_timetable_urls(url, name):
     res = requests.get(url)
     res.encoding = res.apparent_encoding
-
     soup = BeautifulSoup(res.text, 'html.parser')
 
-    save_path = create_save_path(name)
     timetable_urls = []
 
     # <td class="weekday"><a href="../2102/timetable/tt0307/0307010.html">平日</a></td>
@@ -97,28 +106,38 @@ def search_jreast_timetable_urls(url, name):
         timetable_urls.append(urljoin(url, a['href']))
     # print(timetable_urls)
 
-    count = 0
-    for timetable_url in timetable_urls:
-        count += 1
-        create_pdf(get_jreast_print_url(timetable_url), count, save_path)
-
-    merge_pdf_files(save_path, name)
+    download_pdfs(timetable_urls, name)
 
 
 def search_jorudan_timetable_urls(url, name):
-    save_path = create_save_path(name)
     timetable_urls = []
     timetable_urls.append(url + '?&Dw=1&type=p&dr=0')
     timetable_urls.append(url + '?&Dw=1&type=p&dr=1')
     timetable_urls.append(url + '?&Dw=3&type=p&dr=0')
     timetable_urls.append(url + '?&Dw=3&type=p&dr=1')
 
-    count = 0
-    for timetable_url in timetable_urls:
-        count += 1
-        create_pdf(timetable_url, count, save_path)
+    download_pdfs(timetable_urls, name)
 
-    merge_pdf_files(save_path, name)
+
+def search_tokyu_timetable_urls(url, name):
+    res = requests.get(url)
+    res.encoding = res.apparent_encoding
+    soup = BeautifulSoup(res.text, 'html.parser')
+
+    timetable_urls = []
+
+    # <li class="mod-timetable_list_item">
+    # <a href="http://transfer.navitime.biz/tokyu/pc/diagram/TrainDiagram?stCd=00007965&rrCd=00000790&updown=1" target="_blank">
+    # <dl>
+    # <dt>下り</dt>
+    # <dd>元町・中華街方面（※）<span class="mod-icon-blank">（別窓で開く）</span></dd>
+    # </dl>
+    # </a>
+    a_tags = soup.select('li.mod-timetable_list_item a')
+    for a in a_tags:
+        timetable_urls.append(a['href'])
+
+    download_pdfs(timetable_urls, name)
 
 
 def main_function(url, name):
@@ -126,6 +145,9 @@ def main_function(url, name):
         search_jreast_timetable_urls(url, name)
     elif 'jorudan' in url:
         search_jorudan_timetable_urls(url, name)
+    elif 'tokyu' in url:
+        search_tokyu_timetable_urls(url, name)
+
 
 if __name__ == '__main__':
     file_name = './input_url_list.txt'
