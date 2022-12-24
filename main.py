@@ -28,7 +28,7 @@ def download_pdfs(timetable_urls, name):
     count = 0
     for timetable_url in timetable_urls:
         count += 1
-        create_pdf(get_jreast_print_url(timetable_url), count, save_path)
+        create_pdf(timetable_url, count, save_path)
 
     merge_pdf_files(save_path, name)
 
@@ -103,7 +103,7 @@ def search_jreast_timetable_urls(url, name):
     a_tags = soup.select('td.holiday a')
     for a in a_tags:
         # 相対パスになっているので，URLを結合して絶対パスに変換する
-        timetable_urls.append(urljoin(url, a['href']))
+        timetable_urls.append(get_jreast_print_url(urljoin(url, a['href'])))
     # print(timetable_urls)
 
     download_pdfs(timetable_urls, name)
@@ -111,10 +111,8 @@ def search_jreast_timetable_urls(url, name):
 
 def search_jorudan_timetable_urls(url, name):
     timetable_urls = []
-    timetable_urls.append(url + '?&Dw=1&type=p&dr=0')
-    timetable_urls.append(url + '?&Dw=1&type=p&dr=1')
-    timetable_urls.append(url + '?&Dw=3&type=p&dr=0')
-    timetable_urls.append(url + '?&Dw=3&type=p&dr=1')
+    timetable_urls.append(url + '?&Dw=1')
+    timetable_urls.append(url + '?&Dw=3')
 
     download_pdfs(timetable_urls, name)
 
@@ -135,6 +133,8 @@ def search_tokyu_timetable_urls(url, name):
     # </a>
     a_tags = soup.select('li.mod-timetable_list_item a')
     for a in a_tags:
+        if 'class' in a.attrs:
+            continue
         timetable_urls.append(a['href'])
 
     download_pdfs(timetable_urls, name)
