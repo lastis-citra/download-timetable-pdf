@@ -1,14 +1,20 @@
+import json
 import os
+import pathlib
 import shutil
+import time
 from pathlib import Path
 from urllib.parse import urljoin
 
-import requests
-import pdfkit
-from bs4 import BeautifulSoup
-
 import PyPDF2
+import pdfkit
+import requests
+from bs4 import BeautifulSoup
 from natsort import natsorted, ns
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
 
 
 def create_save_path(name):
@@ -27,10 +33,69 @@ def download_pdfs(timetable_urls, name):
 
     count = 0
     for timetable_url in timetable_urls:
-        count += 1
-        create_pdf(timetable_url, count, save_path)
+        if 'timetable-v' not in timetable_url:
+            count += 1
+            create_pdf(timetable_url, count, save_path)
 
     merge_pdf_files(save_path, name)
+
+
+# https://degitalization.hatenablog.jp/entry/2021/03/13/102805
+def create_pdf2(url, count, save_path):
+    save_file_path = os.path.join(save_path, str(count) + '.pdf')
+    print('url: ' + url)
+    print('save_file_path: ' + save_file_path)
+
+    # 印刷としてPDF保存する設定
+    options = webdriver.ChromeOptions()
+    app_state = {
+        "recentDestinations": [
+            {
+                "id": "Save as PDF",
+                "origin": "local",
+                "account": ""
+            }
+        ],
+        "selectedDestinationId": "Save as PDF",
+        "version": 2,
+        "isLandscapeEnabled": False,  # 印刷の向きを指定 tureで横向き、falseで縦向き。
+        "pageSize": 'A4',  # 用紙タイプ(A3、A4、A5、Legal、 Letter、Tabloidなど)
+        # "mediaSize": {"height_microns": 355600, "width_microns": 215900}, #紙のサイズ　（10000マイクロメートル = １cm）
+        # "marginsType": 0, #余白タイプ #0:デフォルト 1:余白なし 2:最小
+        # "scalingType": 3 , #0：デフォルト 1：ページに合わせる 2：用紙に合わせる 3：カスタム
+        # "scaling": "141" ,#倍率
+        # "profile.managed_default_content_settings.images": 2,  #画像を読み込ませない
+        "isHeaderFooterEnabled": False,  # ヘッダーとフッター
+        "isCssBackgroundEnabled": True,  # 背景のグラフィック
+        # "isDuplexEnabled": False, #両面印刷 tureで両面印刷、falseで片面印刷
+        # "isColorEnabled": True, #カラー印刷 trueでカラー、falseで白黒
+        # "isCollateEnabled": True #部単位で印刷
+    }
+    path = pathlib.Path(save_path)
+    print(f'path: {path}')
+    print(path.resolve())
+
+    prefs = {'printing.print_preview_sticky_settings.appState': json.dumps(app_state),
+             'download.default_directory': '.\\pdf\\JR武蔵中原\\'
+             # 'download.default_directory': '~/Downloads'
+             }  # app_state --> pref
+    options.add_experimental_option('prefs', prefs)  # prefs --> chopt
+    options.add_argument("--headless=new")
+    options.add_argument('--kiosk-printing')  # 印刷ダイアログが開くと、印刷ボタンを無条件に押す。
+
+    driver_path = r'.\chromedriver\chromedriver.exe'
+    service = Service(executable_path=driver_path)
+    driver = webdriver.Chrome(service=service, options=options)
+    driver.implicitly_wait(10)  # 秒 暗示的待機
+    driver.get(url)  # URL 読み込み
+    WebDriverWait(driver, 15).until(EC.presence_of_all_elements_located)  # ページ上のすべての要素が読み込まれるまで待機（15秒でタイムアウト判定）
+    # driver.execute_script('return window.print()')  # Print as PDF
+    driver.execute_script('window.print();')
+    time.sleep(10)  # ファイルのダウンロードのために10秒待機
+    driver.quit()  # Close Screen
+
+    # WebページをPDF出力
+    # pdfkit.from_url(url, save_file_path, options=options, configuration=config)
 
 
 def create_pdf(url, count, save_path):
@@ -43,6 +108,7 @@ def create_pdf(url, count, save_path):
         'encoding': "UTF-8",
         'no-outline': None,
         'disable-smart-shrinking': '',
+        # 'orientation': 'Landscape',
     }
 
     config_path = r'.\wkhtmltox\bin\wkhtmltopdf.exe'
@@ -96,7 +162,7 @@ def search_jreast_timetable_urls(url, name):
     a_tags = soup.select('td.weekday a')
     for a in a_tags:
         # 相対パスになっているので，URLを結合して絶対パスに変換する
-        timetable_urls.append(urljoin(url, a['href']))
+        timetable_urls.append(get_jreast_print_url(urljoin(url, a['href'])))
 
     # <td class="holiday"><a href="../2102/timetable/tt0307/0307011.html">土曜・休日</a></td>
     # -> <a href="../2102/timetable/tt0307/0307011.html">土曜・休日</a>
@@ -104,15 +170,13 @@ def search_jreast_timetable_urls(url, name):
     for a in a_tags:
         # 相対パスになっているので，URLを結合して絶対パスに変換する
         timetable_urls.append(get_jreast_print_url(urljoin(url, a['href'])))
-    # print(timetable_urls)
+    print(timetable_urls)
 
     download_pdfs(timetable_urls, name)
 
 
 def search_jorudan_timetable_urls(url, name):
-    timetable_urls = []
-    timetable_urls.append(url + '?&Dw=1')
-    timetable_urls.append(url + '?&Dw=3')
+    timetable_urls = [url + '?&Dw=1', url + '?&Dw=3']
 
     download_pdfs(timetable_urls, name)
 
@@ -182,7 +246,7 @@ if __name__ == '__main__':
     for line in line_list:
         line_count += 1
         input_url = line.split(',')[0]
-        file_name = line.split(',')[1].replace('\n','')
+        file_name = line.split(',')[1].replace('\n', '')
         print(line_count, '/', len(line_list))
         print('input_url: ' + input_url)
         main_function(input_url, file_name)
